@@ -18,7 +18,7 @@ local Settings = {
 }
 local ESP_Boxes = {}
 local ESP_HealthBars = {}
-local ESP_Tracers = {}
+-- Removed: local ESP_Tracers = {} (no longer needed)
 
 -- Wait for Game to Load --
 repeat
@@ -280,10 +280,7 @@ CreateToggle("ESP", UDim2.new(0, 0, 0, 0), VisualContent, function(state)
                 ESP_HealthBars[player].gui:Destroy()
                 ESP_HealthBars[player] = nil
             end
-            if ESP_Tracers[player] then
-                ESP_Tracers[player]:Remove()
-                ESP_Tracers[player] = nil
-            end
+            -- Removed: Tracer cleanup (no longer needed)
         end
     end
 end, false, nil)
@@ -439,7 +436,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ESP with Boxes, Health, and Tracers --
+-- ESP with Boxes and Health Bars (Tracers Removed) --
 local function AddESP(player)
     if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         -- Box --
@@ -486,15 +483,7 @@ local function AddESP(player)
             healthFill.Parent = healthBar
             ESP_HealthBars[player] = {gui = healthGui, fill = healthFill}
         end
-
-        -- Tracer --
-        if Settings.ESP_ENABLED then
-            local tracer = Drawing.new("Line")
-            tracer.Color = Color3.fromRGB(255, 80, 80)
-            tracer.Thickness = 1
-            tracer.Transparency = 1
-            ESP_Tracers[player] = tracer
-        end
+        -- Removed: Tracer creation
     end
 end
 
@@ -514,18 +503,7 @@ local function UpdateESP()
             health.fill.Size = UDim2.new(humanoid.Health / humanoid.MaxHealth, 0, 1, 0)
         end
     end
-    for player, tracer in pairs(ESP_Tracers) do
-        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") or not Settings.ESP_ENABLED then
-            tracer:Remove()
-            ESP_Tracers[player] = nil
-        else
-            local root = player.Character.HumanoidRootPart
-            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-            tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-            tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-            tracer.Visible = onScreen
-        end
-    end
+    -- Removed: Tracer update loop
     if Settings.ESP_ENABLED then
         for _, player in pairs(Players:GetPlayers()) do
             if not ESP_Boxes[player] and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -534,9 +512,7 @@ local function UpdateESP()
             if not ESP_HealthBars[player] and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 AddESP(player)
             end
-            if not ESP_Tracers[player] and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                AddESP(player)
-            end
+            -- Removed: Tracer addition check
         end
     end
 end
@@ -564,9 +540,6 @@ ScreenGui.Destroying:Connect(function()
             ESP_HealthBars[player].gui:Destroy()
             ESP_HealthBars[player] = nil
         end
-        if ESP_Tracers[player] then
-            ESP_Tracers[player]:Remove()
-            ESP_Tracers[player] = nil
-        end
+        -- Removed: Tracer cleanup
     end
 end)
