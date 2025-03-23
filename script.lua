@@ -18,7 +18,6 @@ local Settings = {
 }
 local ESP_Boxes = {}
 local ESP_HealthBars = {}
--- Removed: local ESP_Tracers = {} (no longer needed)
 
 -- Wait for Game to Load --
 repeat
@@ -280,7 +279,6 @@ CreateToggle("ESP", UDim2.new(0, 0, 0, 0), VisualContent, function(state)
                 ESP_HealthBars[player].gui:Destroy()
                 ESP_HealthBars[player] = nil
             end
-            -- Removed: Tracer cleanup (no longer needed)
         end
     end
 end, false, nil)
@@ -364,44 +362,31 @@ local function GetClosestTarget()
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-    if gameProcessedEvent then return end -- Ignore if the input is being processed by the game (e.g., typing in chat)
+    if gameProcessedEvent then return end
 
     if Settings.SILENT_AIM_KEY and input.KeyCode == Settings.SILENT_AIM_KEY and Settings.SILENT_AIM_ENABLED then
         Settings.SILENT_AIM_HOLD = true
     end
 
     if Settings.MOUSE_TELEPORT_KEY and input.KeyCode == Settings.MOUSE_TELEPORT_KEY and Settings.MOUSE_TELEPORT_ENABLED then
-        -- New Mouse Teleport Logic (Working Version) --
         print("Teleport key pressed: " .. tostring(Settings.MOUSE_TELEPORT_KEY))
-
-        -- Wait for character to load if not already loaded --
         if not LocalPlayer.Character then
             print("Waiting for character to load...")
             LocalPlayer.CharacterAdded:Wait()
         end
-
-        -- Check for HumanoidRootPart --
         if not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             print("HumanoidRootPart not found!")
             return
         end
-
         local hrp = LocalPlayer.Character.HumanoidRootPart
         print("Character and HumanoidRootPart found.")
-
-        -- Add a delay to ensure the character is fully initialized --
         wait(0.2)
-
-        -- Use Mouse.Hit to get the target position --
         local success, err = pcall(function()
             local targetPos = Mouse.Hit.Position
             print("Target position from Mouse.Hit: " .. tostring(targetPos))
-
-            -- Teleport the character --
-            hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0)) -- Offset by 3 studs to avoid sinking into the ground
+            hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
             print("Teleport attempted.")
         end)
-
         if not success then
             print("Teleport failed with error: " .. tostring(err))
         end
@@ -418,15 +403,12 @@ RunService.RenderStepped:Connect(function()
     if Settings.SILENT_AIM_ENABLED and Settings.SILENT_AIM_HOLD then
         local target = GetClosestTarget()
         if target and target:FindFirstChild("UpperTorso") and target:FindFirstChild("Head") then
-            -- Track the UpperTorso with camera --
             local torsoPos = target.UpperTorso.Position
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, torsoPos)
-            -- Simulate rapid shooting at the head for instakill --
             local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
             if tool then
                 local shootRemote = tool:FindFirstChild("Shoot") or tool:FindFirstChild("Fire")
                 if shootRemote and shootRemote:IsA("RemoteEvent") then
-                    -- Rapidly fire at the head to ensure instakill --
                     for i = 1, 5 do
                         shootRemote:FireServer(target.Head.Position)
                     end
@@ -436,7 +418,38 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ESP with Boxes and Health Bars (Tracers Removed) --
+-- Function to Get Player Inventory --
+local function GetPlayerInventory(player)
+    local inventory = {}
+    
+    -- Check the player's Backpack for unequipped tools --
+    if player:FindFirstChild("Backpack") then
+        for _, item in pairs(player.Backpack:GetChildren()) do
+            if item:IsA("Tool") then
+                table.insert(inventory, item.Name)
+            end
+        end
+    end
+    
+    -- Check the player's Character for equipped tools --
+    if player.Character then
+        for _, item in pairs(player.Character:GetChildren()) do
+            if item:IsA("Tool") then
+                table.insert(inventory, item.Name .. " (Equipped)")
+            end
+        end
+    end
+    
+    -- If inventory is empty, return a default message --
+    if #inventory == 0 then
+        return "Inventory: Empty"
+    end
+    
+    -- Join the inventory items into a string --
+    return "Inventory: " .. table.concat(inventory, ", ")
+end
+
+-- ESP with Boxes, Health Bars, and Inventory Display --
 local function AddESP(player)
     if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         -- Box --
@@ -453,11 +466,11 @@ local function AddESP(player)
             ESP_Boxes[player] = box
         end
 
-        -- Health Bar and Name --
+        -- Health Bar, Name, and Inventory --
         if Settings.ESP_ENABLED then
             local healthGui = Instance.new("BillboardGui")
             healthGui.Name = "WootingESPHealth"
-            healthGui.Size = UDim2.new(0, 80, 0, 30)
+            healthGui.Size = UDim2.new(0, 120, 0, 50) -- Increased height to accommodate inventory label
             healthGui.StudsOffset = Vector3.new(0, 3.5, 0)
             healthGui.AlwaysOnTop = true
             healthGui.Adornee = player.Character.HumanoidRootPart
@@ -481,9 +494,49 @@ local function AddESP(player)
             healthFill.Size = UDim2.new(1, 0, 1, 0)
             healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
             healthFill.Parent = healthBar
-            ESP_HealthBars[player] = {gui = healthGui, fill = healthFill}
+
+            -- Inventory Label --
+            local inventoryLabel = Instance.new("TextLabel")
+            inventoryLabel.Size = UDim2.new(1, 0, 0, 30) -- Increased height for wrapping text
+            inventoryLabel.Position = UDim2.new(0, 0, 0, 20)
+            inventoryLabel.BackgroundTransparency = 1
+            inventoryLabel.Text = GetPlayerInventory(player)
+            inventoryLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            inventoryLabel.TextScaled = true
+            inventoryLabel.TextWrapped = true
+            inventoryLabel.TextYAlignment = Enum.TextYAlignment.Top
+            inventoryLabel.Parent = healthGui
+
+            ESP_HealthBars[player] = {gui = healthGui, fill = healthFill, inventory = inventoryLabel}
+
+            -- Listen for inventory changes --
+            if player:FindFirstChild("Backpack") then
+                player.Backpack.ChildAdded:Connect(function()
+                    if ESP_HealthBars[player] and ESP_HealthBars[player].inventory then
+                        ESP_HealthBars[player].inventory.Text = GetPlayerInventory(player)
+                    end
+                end)
+                player.Backpack.ChildRemoved:Connect(function()
+                    if ESP_HealthBars[player] and ESP_HealthBars[player].inventory then
+                        ESP_HealthBars[player].inventory.Text = GetPlayerInventory(player)
+                    end
+                end)
+            end
+
+            -- Listen for equipped tool changes --
+            if player.Character then
+                player.Character.ChildAdded:Connect(function(child)
+                    if child:IsA("Tool") and ESP_HealthBars[player] and ESP_HealthBars[player].inventory then
+                        ESP_HealthBars[player].inventory.Text = GetPlayerInventory(player)
+                    end
+                end)
+                player.Character.ChildRemoved:Connect(function(child)
+                    if child:IsA("Tool") and ESP_HealthBars[player] and ESP_HealthBars[player].inventory then
+                        ESP_HealthBars[player].inventory.Text = GetPlayerInventory(player)
+                    end
+                end)
+            end
         end
-        -- Removed: Tracer creation
     end
 end
 
@@ -498,12 +551,17 @@ local function UpdateESP()
         if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") or not Settings.ESP_ENABLED then
             health.gui:Destroy()
             ESP_HealthBars[player] = nil
-        elseif player.Character:FindFirstChild("Humanoid") then
-            local humanoid = player.Character.Humanoid
-            health.fill.Size = UDim2.new(humanoid.Health / humanoid.MaxHealth, 0, 1, 0)
+        else
+            if player.Character:FindFirstChild("Humanoid") then
+                local humanoid = player.Character.Humanoid
+                health.fill.Size = UDim2.new(humanoid.Health / humanoid.MaxHealth, 0, 1, 0)
+            end
+            -- Update inventory display --
+            if health.inventory then
+                health.inventory.Text = GetPlayerInventory(player)
+            end
         end
     end
-    -- Removed: Tracer update loop
     if Settings.ESP_ENABLED then
         for _, player in pairs(Players:GetPlayers()) do
             if not ESP_Boxes[player] and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -512,7 +570,6 @@ local function UpdateESP()
             if not ESP_HealthBars[player] and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 AddESP(player)
             end
-            -- Removed: Tracer addition check
         end
     end
 end
@@ -540,6 +597,5 @@ ScreenGui.Destroying:Connect(function()
             ESP_HealthBars[player].gui:Destroy()
             ESP_HealthBars[player] = nil
         end
-        -- Removed: Tracer cleanup
     end
 end)
